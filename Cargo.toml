@@ -12,7 +12,8 @@ categories = ["gui"]
 
 [dependencies]
 miniquad = { version = "0.4.0", default-features = false }
-yakui-core = "0.2.0"
+yakui-core = { git = "https://github.com/SecondHalfGames/yakui.git", rev = "2ea1ecc691b2391d237502637d707d0e2fee15fc" }
 
 [dev-dependencies]
-yakui = "0.2.0"
+macroquad = "0.4.5"
+yakui = { git = "https://github.com/SecondHalfGames/yakui.git", rev = "2ea1ecc691b2391d237502637d707d0e2fee15fc" }

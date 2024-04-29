@@ -395,7 +395,7 @@ impl YakuiMiniquadState {
 
         self.update_textures(ctx, paint);
 
-        if paint.calls().is_empty() {
+        if paint.layers().is_empty() {
             return;
         }
 
@@ -436,7 +436,8 @@ impl YakuiMiniquadState {
 
                             ctx.apply_scissor_rect(
                                 pos.x as i32,
-                                pos.y as i32,
+                                // Miniquad has flipped Y
+                                (surface.y - pos.y - size.y) as i32,
                                 size.x as i32,
                                 size.y as i32,
                             );
@@ -463,7 +464,7 @@ impl YakuiMiniquadState {
     }
 
     fn update_buffers(&mut self, ctx: &mut Context, paint: &PaintDom) {
-        let commands = paint.calls();
+        let commands = paint.layers().iter().flat_map(|p| p.calls.iter());
         self.commands.clear();
 
         let mut draw_vertices: Vec<YakuiVertex> = Vec::new();
@@ -483,7 +484,12 @@ impl YakuiMiniquadState {
             let start = draw_indices.len() as u32;
             let end = start + indices.len() as u32;
 
-            let texture = mesh.texture.and_then(|index| self.textures.get(&index));
+            let texture = mesh.texture.and_then(|index| match index {
+                yakui_core::TextureId::Managed(id) => self.textures.get(&id),
+                yakui_core::TextureId::User(_id) => {
+                    unimplemented!("User textures are not supported")
+                }
+            });
 
             draw_vertices.extend(vertices);
             draw_indices.extend(&indices);

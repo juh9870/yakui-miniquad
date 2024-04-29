@@ -2,7 +2,8 @@ use std::ops::DerefMut;
 
 use miniquad::window::new_rendering_backend;
 use miniquad::*;
-use yakui::{widgets::Pad, Color};
+use yakui::{use_state, widgets::Pad};
+use yakui_core::MainAxisSize;
 
 use yakui_miniquad::*;
 
@@ -23,9 +24,20 @@ impl EventHandler for Stage {
         self.yakui_mq.start();
 
         yakui::center(|| {
-            yakui::colored_box_container(Color::CORNFLOWER_BLUE, || {
+            yakui::colored_box_container(yakui_core::geometry::Color::CORNFLOWER_BLUE, || {
                 yakui::pad(Pad::all(16.0), || {
-                    yakui::text(32.0, "hello, world!");
+                    let mut list = yakui::widgets::List::column();
+                    list.main_axis_size = MainAxisSize::Min;
+                    list.show(|| {
+                        yakui::text(32.0, "hello, world!");
+
+                        let text = use_state(|| "Input".to_string());
+                        let txt = text.borrow().to_string();
+                        if let Some(txt) = yakui::textbox(txt).into_inner().text {
+                            text.set(txt)
+                        }
+                        yakui::text(32.0, "hello, world!");
+                    });
                 });
             });
         });
