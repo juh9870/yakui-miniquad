@@ -107,6 +107,7 @@
 use std::mem::size_of;
 use std::{collections::HashMap, ops::Range};
 
+pub use miniquad;
 use miniquad::window::{dpi_scale, screen_size};
 use miniquad::{
     Bindings, BlendFactor, BlendState, BlendValue, BufferId, BufferLayout, BufferSource,
@@ -115,13 +116,11 @@ use miniquad::{
     PrimitiveType, ShaderSource, TextureAccess, TextureFormat, TextureId, TextureKind,
     TextureParams, TextureSource, TextureWrap, VertexAttribute, VertexFormat,
 };
+pub use yakui_core;
 use yakui_core::geometry::Rect;
 use yakui_core::input::KeyCode as YakuiKeyCode;
 use yakui_core::input::MouseButton as YakuiMouseButton;
 use yakui_core::{event::Event, paint::PaintDom, Yakui};
-
-pub use miniquad;
-pub use yakui_core;
 
 #[repr(C)]
 struct YakuiVertex {
@@ -145,6 +144,24 @@ impl YakuiMiniQuad {
             has_keyboard_focus: false,
             has_mouse_focus: false,
         }
+    }
+
+    /// Adds a new user texture, returning the ID for later use in yakui
+    ///
+    /// User textures managed by YakuiMiniQuad are dropped when [YakuiMiniquadState::drop_textures] is called
+    pub fn add_user_texture(&mut self, texture: TextureId) -> u64 {
+        self.state.user_textures.push(texture);
+        (self.state.user_textures.len() - 1) as u64
+    }
+
+    /// Replaces an existing user texture with a provided texture
+    pub fn replace_user_texture(&mut self, id: u64, texture: TextureId) {
+        self.state.user_textures[id as usize] = texture;
+    }
+
+    /// Direct access to Vec of user textures
+    pub fn user_textures(&mut self) -> &mut Vec<TextureId> {
+        &mut self.state.user_textures
     }
 
     /// Returns true if the last mouse or keyboard event was sunk by yakui, and should not be handled by your game.
@@ -193,6 +210,18 @@ impl YakuiMiniQuad {
     /// Renders the queued ui draw commands.
     pub fn draw(&mut self, ctx: &mut Context) {
         self.state.paint(ctx, &mut self.ui);
+    }
+
+    /// Drops all textures managed by the YakuiMiniQuad.
+    ///
+    /// Simply allowing [YakuiMiniQuad] object to go out of scope without
+    /// calling this method will result in textures continuing to hog up memory
+    /// inside [Context] until the end of its lifetime
+    ///
+    /// This method consumes the YakuiMiniQuad, since there is no sane way to
+    /// continue operating once all Yakui-managed textures are dropped
+    pub fn drop_textures(self, ctx: &mut Context) {
+        self.state.drop_textures(ctx)
     }
 }
 
@@ -292,6 +321,7 @@ pub struct YakuiMiniquadState {
     main_pipeline: Pipeline,
     text_pipeline: Pipeline,
     textures: HashMap<yakui_core::ManagedTextureId, TextureId>,
+    user_textures: Vec<TextureId>,
     layout: Bindings,
 
     default_texture: TextureId,
@@ -368,6 +398,7 @@ impl YakuiMiniquadState {
             main_pipeline,
             text_pipeline,
             textures,
+            user_textures: vec![],
             layout,
             default_texture,
             vertices: ctx.new_buffer(
@@ -384,8 +415,11 @@ impl YakuiMiniquadState {
         }
     }
 
-    pub fn drop_textures(&mut self, ctx: &mut Context) {
+    pub fn drop_textures(self, ctx: &mut Context) {
         for (_, texture) in &self.textures {
+            ctx.delete_texture(*texture);
+        }
+        for texture in &self.user_textures {
             ctx.delete_texture(*texture);
         }
     }
@@ -486,9 +520,7 @@ impl YakuiMiniquadState {
 
             let texture = mesh.texture.and_then(|index| match index {
                 yakui_core::TextureId::Managed(id) => self.textures.get(&id),
-                yakui_core::TextureId::User(_id) => {
-                    unimplemented!("User textures are not supported")
-                }
+                yakui_core::TextureId::User(id) => self.user_textures.get(id as usize),
             });
 
             draw_vertices.extend(vertices);
@@ -813,7 +845,6 @@ fn make_text_pipeline(
 }
 
 mod yakui_shader_main {
-
     use miniquad::*;
 
     pub const VERTEX: &str = r#"#version 100
@@ -856,7 +887,6 @@ mod yakui_shader_main {
 }
 
 mod yakui_shader_text {
-
     use miniquad::*;
 
     pub const VERTEX: &str = r#"#version 100
